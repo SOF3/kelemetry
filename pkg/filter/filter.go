@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
@@ -81,7 +82,7 @@ type filter struct {
 	Discovery discovery.DiscoveryCache
 	Clients   k8s.Clients
 
-	excludeTypeHashTable map[schema.GroupResource]struct{}
+	excludeTypeHashTable sets.Set[schema.GroupResource]
 	configMapInformer    informers.SharedInformerFactory
 	recorder             record.EventRecorder
 
@@ -100,7 +101,7 @@ func (filter *filter) Options() manager.Options {
 }
 
 func (filter *filter) Init() error {
-	filter.excludeTypeHashTable = make(map[schema.GroupResource]struct{}, len(filter.options.excludedTypes))
+	filter.excludeTypeHashTable = make(sets.Set[schema.GroupResource], len(filter.options.excludedTypes))
 
 	for _, ty := range filter.options.excludedTypes {
 		split := strings.Split(ty, "/")
@@ -115,7 +116,7 @@ func (filter *filter) Init() error {
 			return fmt.Errorf("cannot parse %q as a GVR", ty)
 		}
 
-		filter.excludeTypeHashTable[parsed] = struct{}{}
+		filter.excludeTypeHashTable.Insert(parsed)
 	}
 
 	filter.configMapInformer = filter.Clients.TargetCluster().NewInformerFactory(

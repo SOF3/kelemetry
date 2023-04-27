@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -64,12 +65,12 @@ func (*Provider) MuxImplName() (name string, isDefault bool) { return "mapoption
 func (provider *Provider) Options() manager.Options { return &provider.options }
 
 func (provider *Provider) Init() error {
-	names := map[string]struct{}{}
+	names := sets.New[string]()
 	for name := range provider.options.master {
-		names[name] = struct{}{}
+		names.Insert(name)
 	}
 	for name := range provider.options.kubeconfig {
-		names[name] = struct{}{}
+		names.Insert(name)
 	}
 
 	provider.configs = make(map[string]*rest.Config, len(names))

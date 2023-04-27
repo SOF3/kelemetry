@@ -18,13 +18,14 @@ import (
 	"fmt"
 
 	"github.com/jaegertracing/jaeger/model"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type SpanTree struct {
 	spanMap      map[model.SpanID]*model.Span
-	childrenMap  map[model.SpanID]map[model.SpanID]struct{}
+	childrenMap  map[model.SpanID]sets.Set[model.SpanID]
 	visitorStack map[model.SpanID]*stackEntry
-	exited       map[model.SpanID]struct{}
+	exited       sets.Set[model.SpanID]
 	Root         *model.Span
 }
 
@@ -40,9 +41,9 @@ type stackEntry struct {
 func NewSpanTree(trace *model.Trace) SpanTree {
 	tree := SpanTree{
 		spanMap:      make(map[model.SpanID]*model.Span, len(trace.Spans)),
-		childrenMap:  make(map[model.SpanID]map[model.SpanID]struct{}, len(trace.Spans)),
+		childrenMap:  make(map[model.SpanID]sets.Set[model.SpanID], len(trace.Spans)),
 		visitorStack: make(map[model.SpanID]*stackEntry),
-		exited:       make(map[model.SpanID]struct{}, len(trace.Spans)),
+		exited:       make(sets.Set[model.SpanID], len(trace.Spans)),
 	}
 
 	for _, span := range trace.Spans {
@@ -53,17 +54,17 @@ func NewSpanTree(trace *model.Trace) SpanTree {
 			ref := span.References[0]
 			parentId := ref.SpanID
 			if _, exists := tree.childrenMap[parentId]; !exists {
-				tree.childrenMap[parentId] = map[model.SpanID]struct{}{}
+				tree.childrenMap[parentId] = sets.Set[model.SpanID]{}
 			}
-			tree.childrenMap[parentId][span.SpanID] = struct{}{}
+			tree.childrenMap[parentId].Insert(span.SpanID)
 		}
 	}
 
 	return tree
 }
 
-func (tree SpanTree) Span(id model.SpanID) *model.Span                   { return tree.spanMap[id] }
-func (tree SpanTree) Children(id model.SpanID) map[model.SpanID]struct{} { return tree.childrenMap[id] }
+func (tree SpanTree) Span(id model.SpanID) *model.Span                { return tree.spanMap[id] }
+func (tree SpanTree) Children(id model.SpanID) sets.Set[model.SpanID] { return tree.childrenMap[id] }
 
 func (tree SpanTree) GetSpans() []*model.Span {
 	spans := make([]*model.Span, 0, len(tree.spanMap))
@@ -86,7 +87,7 @@ func (tree *SpanTree) SetRoot(id model.SpanID) {
 
 	tree.Root = newRoot
 
-	collector := &spanIdCollector{spanIds: map[model.SpanID]struct{}{}}
+	collector := &spanIdCollector{spanIds: sets.Set[model.SpanID]{}}
 	tree.Visit(collector)
 
 	for spanId := range tree.spanMap {
@@ -103,11 +104,11 @@ func (tree *SpanTree) SetRoot(id model.SpanID) {
 }
 
 type spanIdCollector struct {
-	spanIds map[model.SpanID]struct{}
+	spanIds sets.Set[model.SpanID]
 }
 
 func (collector *spanIdCollector) Enter(tree SpanTree, span *model.Span) TreeVisitor {
-	collector.spanIds[span.SpanID] = struct{}{}
+	collector.spanIds.Insert(span.SpanID)
 	return collector
 }
 func (collector *spanIdCollector) Exit(tree SpanTree, span *model.Span) {}
@@ -154,7 +155,7 @@ func (subtree spanNode) visit(visitor TreeVisitor) {
 	delete(subtree.tree.visitorStack, subtree.node.SpanID)
 
 	visitor.Exit(subtree.tree, subtree.node)
-	subtree.tree.exited[subtree.node.SpanID] = struct{}{}
+	subtree.tree.exited.Insert(subtree.node.SpanID)
 
 	if len(subtree.tree.visitorStack) == 0 {
 		for spanId := range subtree.tree.exited {
@@ -167,7 +168,7 @@ func (subtree spanNode) visit(visitor TreeVisitor) {
 //
 // parentId must not be exited yet (and may or may not be entered).
 func (tree SpanTree) Add(newSpan *model.Span, parentId model.SpanID) {
-	if _, exited := tree.exited[parentId]; exited {
+	if tree.exited.Has(parentId) {
 		panic("cannot add under already-exited span")
 	}
 
@@ -179,9 +180,9 @@ func (tree SpanTree) Add(newSpan *model.Span, parentId model.SpanID) {
 	}}
 
 	if _, exists := tree.childrenMap[parentId]; !exists {
-		tree.childrenMap[parentId] = map[model.SpanID]struct{}{}
+		tree.childrenMap[parentId] = sets.Set[model.SpanID]{}
 	}
-	tree.childrenMap[parentId][newSpan.SpanID] = struct{}{}
+	tree.childrenMap[parentId].Insert(newSpan.SpanID)
 
 	if stack, hasStack := tree.visitorStack[parentId]; hasStack {
 		// parent already entered, not yet exited
@@ -196,7 +197,7 @@ func (tree SpanTree) Add(newSpan *model.Span, parentId model.SpanID) {
 // movedSpan must not be entered yet.
 // newParent must not be exited yet (and may or may not be entered).
 func (tree SpanTree) Move(movedSpanId model.SpanID, newParentId model.SpanID) {
-	if _, exited := tree.exited[newParentId]; exited {
+	if tree.exited.Has(newParentId) {
 		panic("cannot move already-exited span")
 	}
 
@@ -210,9 +211,9 @@ func (tree SpanTree) Move(movedSpanId model.SpanID, newParentId model.SpanID) {
 	ref.SpanID = newParentId
 
 	if _, exists := tree.childrenMap[newParentId]; !exists {
-		tree.childrenMap[newParentId] = map[model.SpanID]struct{}{}
+		tree.childrenMap[newParentId] = sets.Set[model.SpanID]{}
 	}
-	tree.childrenMap[newParentId][movedSpanId] = struct{}{}
+	tree.childrenMap[newParentId].Insert(movedSpanId)
 
 	delete(tree.childrenMap[oldParentId], movedSpanId)
 
@@ -236,7 +237,7 @@ func (tree SpanTree) Delete(spanId model.SpanID) {
 	if _, entered := tree.visitorStack[spanId]; entered {
 		panic("cannot delete a parent span")
 	}
-	if _, exited := tree.exited[spanId]; exited {
+	if tree.exited.Has(spanId) {
 		panic("cannot delete an exited span")
 	}
 

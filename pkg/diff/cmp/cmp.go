@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type DiffList struct {
@@ -106,7 +108,7 @@ func compareMaps(
 	jsonPath []string,
 	oldObj, newObj map[string]any,
 ) {
-	keysMap := map[string]struct{}{}
+	keysMap := sets.Set[string]{}
 	collectKeys(keysMap, oldObj)
 	collectKeys(keysMap, newObj)
 	keys := getMapKeys(keysMap)
@@ -134,13 +136,13 @@ func compareMaps(
 	}
 }
 
-func collectKeys(dest map[string]struct{}, src map[string]any) {
+func collectKeys(dest sets.Set[string], src map[string]any) {
 	for key := range src {
-		dest[key] = struct{}{}
+		dest.Insert(key)
 	}
 }
 
-func getMapKeys(m map[string]struct{}) []string {
+func getMapKeys(m sets.Set[string]) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

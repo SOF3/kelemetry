@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/kubewharf/kelemetry/pkg/aggregator/aggregatorevent"
 	"github.com/kubewharf/kelemetry/pkg/aggregator/eventdecorator"
@@ -53,7 +54,7 @@ type eventTagDecorator struct {
 	ResourceTagger *resourcetagger.ResourceTagger
 	options        options
 	EventDecorator eventdecorator.UnionEventDecorator
-	filterVerbs    map[string]struct{}
+	filterVerbs    sets.Set[string]
 }
 
 var _ manager.Component = &eventTagDecorator{}
@@ -65,10 +66,7 @@ func (d *eventTagDecorator) Options() manager.Options {
 func (d *eventTagDecorator) Init() error {
 	d.EventDecorator.AddDecorator(d)
 
-	d.filterVerbs = map[string]struct{}{}
-	for _, item := range d.options.filterVerbs {
-		d.filterVerbs[item] = struct{}{}
-	}
+	d.filterVerbs = sets.New(d.options.filterVerbs...)
 	return nil
 }
 
@@ -81,8 +79,9 @@ func (d *eventTagDecorator) Decorate(ctx context.Context, object util.ObjectRef,
 		return
 	}
 
-	if _, exist := d.filterVerbs[fmt.Sprint(event.Tags["tag"])]; !exist {
+	if !d.filterVerbs.Has(fmt.Sprint(event.Tags["tag"])) {
 		return
 	}
+
 	d.ResourceTagger.DecorateTag(ctx, object, event.TraceSource, event.Tags)
 }
