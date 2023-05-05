@@ -60,10 +60,11 @@ func init() {
 type options struct {
 	enable                bool
 	configMapSyncInterval time.Duration
-	electorOptions        multileader.Config
 	configMapName         string
 	configMapNamespace    string
 	workerCount           int
+	resyncPeriod          time.Duration
+	electorOptions        multileader.Config
 }
 
 func (options *options) Setup(fs *pflag.FlagSet) {
@@ -97,6 +98,7 @@ func (options *options) Setup(fs *pflag.FlagSet) {
 		8,
 		"number of worker counts",
 	)
+	fs.DurationVar(&options.resyncPeriod, "event-informer-resync-period", 0, "resync period for event reflector, 0 for never resync")
 	options.electorOptions.SetupOptions(
 		fs,
 		"event-informer",
@@ -205,7 +207,7 @@ func (ctrl *controller) runLeader(ctx context.Context) {
 	addCh := store.SetAddCh()
 	replaceCh := store.SetReplaceCh()
 
-	reflector := toolscache.NewReflector(&lw, &corev1.Event{}, store, 0)
+	reflector := toolscache.NewReflector(&lw, &corev1.Event{}, store, ctrl.options.resyncPeriod)
 	go func() {
 		defer shutdown.RecoverPanic(ctrl.Logger)
 		reflector.Run(ctx.Done())
