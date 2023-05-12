@@ -1,5 +1,7 @@
 FROM golang:1.20-alpine AS build
 
+RUN apk add --no-cache git
+
 RUN mkdir /src
 WORKDIR /src
 ADD go.mod go.mod
