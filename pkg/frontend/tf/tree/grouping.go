@@ -15,6 +15,8 @@
 package tftree
 
 import (
+	"strings"
+
 	"github.com/jaegertracing/jaeger/model"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -86,4 +88,19 @@ func GroupingKeysFromSpans(spans []*model.Span) sets.Set[GroupingKey] {
 		}
 	}
 	return keys
+}
+
+func (k *GroupingKey) Clone() *GroupingKey {
+	if k == nil {
+		return nil
+	}
+
+	return &GroupingKey{
+		Cluster:   strings.Clone(k.Cluster),
+		Group:     strings.Clone(k.Group),
+		Resource:  strings.Clone(k.Resource),
+		Namespace: strings.Clone(k.Namespace),
+		Name:      strings.Clone(k.Name),
+		Field:     strings.Clone(k.Field),
+	}
 }

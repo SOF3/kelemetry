@@ -16,6 +16,7 @@ package local
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -68,7 +69,15 @@ func (cache *localCache) Fetch(ctx context.Context, lowId uint64) (*tracecache.E
 	defer cache.dataLock.RUnlock()
 
 	if value, exists := cache.data[lowId]; exists {
-		return &value, nil
+		identifiers := make([]json.RawMessage, len(value.Identifiers))
+		copy(identifiers, value.Identifiers)
+
+		return &tracecache.EntryValue{
+			Identifiers: identifiers,
+			StartTime:   value.StartTime,
+			EndTime:     value.EndTime,
+			RootObject:  value.RootObject.Clone(),
+		}, nil
 	}
 
 	return nil, fmt.Errorf("No trace cache for key %x", lowId)
