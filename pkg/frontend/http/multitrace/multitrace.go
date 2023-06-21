@@ -61,7 +61,7 @@ type requestMetric struct {
 	Error metrics.LabeledError
 }
 
-func (*requestMetric) MetricName() string { return "redirect_request" }
+func (*requestMetric) MetricName() string { return "multitrace_request" }
 
 func (server *server) Options() manager.Options {
 	return &server.options
@@ -74,7 +74,7 @@ func (server *server) Init() error {
 		metric := &requestMetric{}
 		defer server.RequestMetric.DeferCount(server.Clock.Now(), metric)
 
-		logger.WithField("query", ctx.Request.URL.RawQuery).Infof("GET /redirect %v", ctx.Request.URL.Query())
+		logger.WithField("query", ctx.Request.URL.RawQuery).Infof("GET %v", ctx.Request.URL.Path)
 
 		if code, err := server.handleGet(ctx, metric); err != nil {
 			logger.WithError(err).Error()
