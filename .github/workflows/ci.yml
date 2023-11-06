@@ -9,6 +9,9 @@ jobs:
   test:
     name: Run unit tests
     runs-on: [ubuntu-20.04]
+    permissions:
+      checks: write
+      statuses: write
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v3
