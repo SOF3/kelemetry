@@ -407,7 +407,7 @@ func (ctrl *controller) pollConfigLoop(
 	configMap *corev1.ConfigMap,
 	updateCh <-chan func(*corev1.ConfigMap),
 ) (_changed, _shutdown bool) {
-	changed := false
+	changed := true
 
 	until := ctrl.Clock.After(interval)
 
